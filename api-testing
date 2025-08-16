@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GovFeeds – federal updates on your phone</title>
+  <meta name="theme-color" content="#111827" />
+  <style>
+    :root{
+      --bg:#0b1220; --fg:#e5e7eb; --muted:#9ca3af; --card:#111827; --accent:#60a5fa; --danger:#f87171; --ok:#34d399;
+      --ring: rgba(96,165,250,.45);
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font:16px system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
+    a{color:var(--accent);text-decoration:none}
+    a:focus,button:focus,input:focus{outline:2px solid var(--ring);outline-offset:2px}
+    header{position:sticky;top:0;z-index:10;background:linear-gradient(180deg,#0b1220 0%,rgba(11,18,32,.92) 70%,rgba(11,18,32,.7) 100%);backdrop-filter:saturate(140%) blur(6px);}
+    .wrap{max-width:900px;margin:0 auto;padding:12px 14px}
+    .row{display:flex;align-items:center;gap:10px}
+    h1{font-size:20px;margin:6px 0}
+    .btn{appearance:none;border:1px solid #2a3446;background:#0f172a;color:var(--fg);padding:10px 12px;border-radius:12px;cursor:pointer}
+    .btn.ghost{background:transparent}
+    .btn.primary{border-color:#1f2a3d;background:#1f2a3d}
+    .btn.full{width:100%}
+    .grid{display:grid;gap:12px}
+    @media(min-width:720px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+    section{margin:14px 0}
+    .card{background:var(--card);border:1px solid #1f2a3d;border-radius:16px;padding:14px}
+    .title{font-weight:700;margin:0 0 6px}
+    .meta{color:var(--muted);font-size:13px;margin-bottom:8px}
+    .pill{display:inline-block;border:1px solid #334155;border-radius:999px;padding:2px 8px;font-size:12px;color:#cbd5e1;margin-right:6px}
+    .footer{font-size:12px;color:var(--muted);margin-top:8px}
+    .section-title{display:flex;align-items:center;justify-content:space-between;margin:14px 2px}
+    .section-title h2{font-size:16px;margin:0}
+    .empty{color:var(--muted);font-style:italic}
+    .badge{font-size:12px;padding:2px 8px;border-radius:999px;background:#0f172a;border:1px solid #334155;color:#cbd5e1}
+    .danger{color:var(--danger)}
+    .ok{color:var(--ok)}
+
+    /* Settings panel */
+    dialog{width:min(720px,92vw);border:1px solid #223049;border-radius:18px;background:#0b1220;color:var(--fg);padding:0}
+    dialog::backdrop{background:rgba(0,0,0,.56)}
+    .dlg-head{padding:14px;border-bottom:1px solid #1f2a3d;display:flex;justify-content:space-between;align-items:center}
+    .dlg-body{padding:14px}
+    .field{margin:10px 0}
+    label{display:block;margin-bottom:6px;color:#cbd5e1;font-size:14px}
+    input[type="text"],input[type="password"],input[type="number"]{width:100%;padding:12px 10px;border-radius:12px;border:1px solid #223049;background:#0f172a;color:var(--fg)}
+    .two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+
+    /* Small helpers */
+    .spinner{width:16px;height:16px;border:2px solid #314160;border-top-color:var(--accent);border-radius:50%;display:inline-block;animation:spin 1s linear infinite;vertical-align:-2px}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .sr-only{position:absolute;left:-10000px}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap row" style="justify-content:space-between">
+      <div class="row">
+        <h1>GovFeeds</h1>
+        <span class="badge" id="statusBadge">offline</span>
+      </div>
+      <div class="row">
+        <button class="btn ghost" id="refreshBtn">Refresh</button>
+        <button class="btn primary" id="openSettings">Settings</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section>
+      <div class="section-title">
+        <h2>Federal Register – latest</h2>
+        <span class="badge" id="frCount">…</span>
+      </div>
+      <div id="frList" class="grid"></div>
+    </section>
+
+    <section>
+      <div class="section-title">
+        <h2>NWS Alerts (<span id="stateLabel">set state</span>)</h2>
+        <span class="badge" id="nwsCount">…</span>
+      </div>
+      <div id="nwsList" class="grid"></div>
+    </section>
+
+    <section>
+      <div class="section-title">
+        <h2>Congress.gov – recent bills</h2>
+        <span class="badge" id="cgCount">API key optional</span>
+      </div>
+      <div id="cgList" class="grid"></div>
+    </section>
+
+    <p class="footer">Tip: On iPhone Safari, tap <strong>Share</strong> → <strong>Add to Home Screen</strong> to pin GovFeeds like an app.</p>
+  </main>
+
+  <!-- Settings dialog -->
+  <dialog id="settings">
+    <div class="dlg-head">
+      <strong>Settings</strong>
+      <button class="btn ghost" id="closeSettings">Close</button>
+    </div>
+    <form method="dialog" class="dlg-body" id="settingsForm">
+      <div class="two">
+        <div class="field">
+          <label for="state">State (2-letter, e.g., PA)</label>
+          <input id="state" name="state" type="text" minlength="2" maxlength="2" placeholder="PA" />
+        </div>
+        <div class="field">
+          <label for="perPage">Items per feed</label>
+          <input id="perPage" name="perPage" type="number" min="1" max="50" value="10" />
+        </div>
+      </div>
+      <div class="field">
+        <label for="cgKey">Congress.gov API key (optional)</label>
+        <input id="cgKey" name="cgKey" type="password" placeholder="Paste your key" />
+      </div>
+      <div class="row" style="justify-content:flex-end;gap:8px;margin-top:6px">
+        <button class="btn ghost" type="reset" id="resetBtn">Reset</button>
+        <button class="btn primary" type="submit">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script>
+    const els = {
+      frList: document.getElementById('frList'),
+      nwsList: document.getElementById('nwsList'),
+      cgList: document.getElementById('cgList'),
+      frCount: document.getElementById('frCount'),
+      nwsCount: document.getElementById('nwsCount'),
+      cgCount: document.getElementById('cgCount'),
+      stateLabel: document.getElementById('stateLabel'),
+      statusBadge: document.getElementById('statusBadge'),
+      refreshBtn: document.getElementById('refreshBtn'),
+      openSettings: document.getElementById('openSettings'),
+      closeSettings: document.getElementById('closeSettings'),
+      dlg: document.getElementById('settings'),
+      form: document.getElementById('settingsForm'),
+      fieldState: document.getElementById('state'),
+      fieldPerPage: document.getElementById('perPage'),
+      fieldCgKey: document.getElementById('cgKey'),
+      resetBtn: document.getElementById('resetBtn'),
+    };
+
+    const store = {
+      get(){
+        const raw = localStorage.getItem('govfeeds');
+        return raw ? JSON.parse(raw) : { state: 'PA', perPage: 10, cgKey: '' };
+      },
+      set(v){ localStorage.setItem('govfeeds', JSON.stringify(v)); }
+    };
+
+    function setStatus(){
+      const online = navigator.onLine;
+      els.statusBadge.textContent = online ? 'online' : 'offline';
+      els.statusBadge.style.color = online ? 'var(--ok)' : 'var(--danger)';
+    }
+
+    window.addEventListener('online', setStatus);
+    window.addEventListener('offline', setStatus);
+    setStatus();
+
+    function timeAgo(dateStr){
+      const d = new Date(dateStr);
+      const diff = (Date.now() - d.getTime())/1000;
+      const rtf = new Intl.RelativeTimeFormat(undefined,{numeric:'auto'});
+      const table = [[60,'second'],[60,'minute'],[24,'hour'],[7,'day'],[4.345,'week'],[12,'month'],[Number.POSITIVE_INFINITY,'year']];
+      let unit = 'second', val = -Math.round(diff);
+      let acc = 1, t = diff;
+      for(const [f,u] of table){ if(t < f){ unit = u; val = -Math.round(t); break;} t = t / f; }
+      return rtf.format(val, unit);
+    }
+
+    function card({title, meta, url, pills=[]}){
+      const pillsHtml = pills.map(p=>`<span class="pill">${p}</span>`).join('');
+      return `<article class="card">
+        <h3 class="title"><a href="${url}" target="_blank" rel="noopener">${title}</a></h3>
+        ${meta ? `<div class="meta">${meta}</div>`: ''}
+        ${pillsHtml}
+      </article>`;
+    }
+
+    async function loadFederalRegister(perPage){
+      els.frList.innerHTML = `<div class="card"><span class="spinner"></span> Loading Federal Register…</div>`;
+      try{
+        const url = new URL('https://www.federalregister.gov/api/v1/documents.json');
+        url.searchParams.set('per_page', perPage);
+        url.searchParams.set('order','newest');
+        const res = await fetch(url);
+        if(!res.ok) throw new Error('FR HTTP '+res.status);
+        const data = await res.json();
+        els.frCount.textContent = data.count ? `${Math.min(perPage, data.count)} of ${data.count}` : `${data.results?.length||0}`;
+        const items = (data.results||[]).map(doc=>{
+          const title = doc.title || 'Untitled';
+          const url = doc.html_url || doc.pdf_url || '#';
+          const meta = `${doc.agencies?.map(a=>a.name).join(', ')||'Agency'} · ${doc.publication_date} · ${timeAgo(doc.publication_date)}`;
+          const pills = [doc.type||'document'];
+          return card({title, meta, url, pills});
+        }).join('');
+        els.frList.innerHTML = items || `<div class="card empty">No documents.</div>`;
+      }catch(err){
+        els.frList.innerHTML = `<div class="card danger">Federal Register error: ${err.message}</div>`;
+        els.frCount.textContent = 'error';
+      }
+    }
+
+    async function loadNws(state, perPage){
+      els.nwsList.innerHTML = `<div class="card"><span class="spinner"></span> Loading NWS alerts…</div>`;
+      els.stateLabel.textContent = state || 'set state';
+      if(!state){ els.nwsList.innerHTML = `<div class="card empty">Set your state code in Settings.</div>`; els.nwsCount.textContent = '—'; return; }
+      try{
+        const url = new URL('https://api.weather.gov/alerts/active');
+        url.searchParams.set('area', state.toUpperCase());
+        url.searchParams.set('limit', perPage);
+        const res = await fetch(url, {headers:{'Accept':'application/geo+json'}});
+        if(!res.ok) throw new Error('NWS HTTP '+res.status);
+        const data = await res.json();
+        const feats = data.features||[];
+        els.nwsCount.textContent = feats.length;
+        const items = feats.map(f=>{
+          const p=f.properties||{};
+          const title = p.event || 'Alert';
+          const meta = `${p.severity||'Severity'} · ${p.areaDesc||state} · ${p.effective?.slice(0,19).replace('T',' ')} (${timeAgo(p.effective)})`;
+          const url = p.uri || p.instruction || '#';
+          const pills = [p.status||'active', p.category||'wx'];
+          return card({title, meta, url, pills});
+        }).join('');
+        els.nwsList.innerHTML = items || `<div class="card empty">No active alerts.</div>`;
+      }catch(err){
+        els.nwsList.innerHTML = `<div class="card danger">NWS error: ${err.message}</div>`;
+        els.nwsCount.textContent = 'error';
+      }
+    }
+
+    async function loadCongress(perPage, key){
+      els.cgList.innerHTML = `<div class="card"><span class="spinner"></span> Loading Congress.gov…</div>`;
+      if(!key){ els.cgList.innerHTML = `<div class="card empty">Add a Congress.gov API key in Settings to see recent bills.</div>`; els.cgCount.textContent = 'no key'; return; }
+      try{
+        const url = new URL('https://api.congress.gov/v3/bill');
+        url.searchParams.set('api_key', key);
+        url.searchParams.set('format','json');
+        url.searchParams.set('limit', perPage);
+        const res = await fetch(url);
+        if(!res.ok) throw new Error('Congress HTTP '+res.status);
+        const data = await res.json();
+        const bills = data.bills||[];
+        els.cgCount.textContent = bills.length || '0';
+        const items = bills.map(b=>{
+          const title = b.title || `${b.type||''} ${b.number||''}`.trim();
+          const introduced = b.introducedDate || b.latestAction?.actionDate;
+          const meta = `${(b.originChamber||'').toUpperCase()} · ${introduced||''} ${introduced? '('+timeAgo(introduced)+')':''}`;
+          const url = b.url || `https://www.congress.gov/bill/${b.congress||''}${b.type?'/'+b.type:''}${b.number?'/'+b.number:''}`;
+          const pills = [b.type?.toUpperCase()||'BILL', b.congress?`${b.congress}th`:''];
+          return card({title, meta, url, pills});
+        }).join('');
+        els.cgList.innerHTML = items || `<div class="card empty">No bills found.</div>`;
+      }catch(err){
+        els.cgList.innerHTML = `<div class="card danger">Congress.gov error (CORS or key?): ${err.message}</div>`;
+        els.cgCount.textContent = 'error';
+      }
+    }
+
+    async function loadAll(){
+      const cfg = store.get();
+      els.stateLabel.textContent = cfg.state || 'set state';
+      await Promise.allSettled([
+        loadFederalRegister(cfg.perPage||10),
+        loadNws(cfg.state||'PA', cfg.perPage||10),
+        loadCongress(cfg.perPage||10, cfg.cgKey||'')
+      ]);
+    }
+
+    // Settings dialog logic
+    els.openSettings.addEventListener('click', ()=>{
+      const cfg = store.get();
+      els.fieldState.value = cfg.state||'';
+      els.fieldPerPage.value = cfg.perPage||10;
+      els.fieldCgKey.value = cfg.cgKey||'';
+      els.dlg.showModal();
+    });
+    els.closeSettings.addEventListener('click', ()=> els.dlg.close());
+
+    els.form.addEventListener('submit', (e)=>{
+      e.preventDefault();
+      const state = els.fieldState.value.trim().toUpperCase();
+      const perPage = Math.max(1, Math.min(50, Number(els.fieldPerPage.value)||10));
+      const cgKey = els.fieldCgKey.value.trim();
+      store.set({state, perPage, cgKey});
+      els.dlg.close();
+      loadAll();
+    });
+    els.resetBtn.addEventListener('click', ()=>{
+      store.set({state:'PA', perPage:10, cgKey:''});
+    });
+
+    els.refreshBtn.addEventListener('click', loadAll);
+
+    // Initial load
+    loadAll();
+  </script>
+</body>
+</html>
