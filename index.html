@@ -65,6 +65,7 @@
       </div>
       <div class="row">
         <button class="btn ghost" id="refreshBtn">Refresh</button>
+        <button class="btn ghost" id="diagnoseBtn">Diagnose</button>
         <button class="btn primary" id="openSettings">Settings</button>
       </div>
     </div>
@@ -134,6 +135,18 @@
     </form>
   </dialog>
 
+  <!-- Diagnostics dialog -->
+  <dialog id="diag">
+    <div class="dlg-head">
+      <strong>Diagnostics</strong>
+      <button class="btn ghost" id="closeDiag">Close</button>
+    </div>
+    <div class="dlg-body">
+      <div id="diagOut" class="grid"></div>
+      <div class="footer">This checks connectivity to the three feeds from your device/browser.</div>
+    </div>
+  </dialog>
+
   <script>
     const els = {
       frList: document.getElementById('frList'),
@@ -155,6 +168,10 @@
       fieldPerPage: document.getElementById('perPage'),
       fieldCgKey: document.getElementById('cgKey'),
       resetBtn: document.getElementById('resetBtn'),
+      diagnoseBtn: document.getElementById('diagnoseBtn'),
+      diag: document.getElementById('diag'),
+      closeDiag: document.getElementById('closeDiag'),
+      diagOut: document.getElementById('diagOut'),
     };
 
     const store = {
@@ -189,8 +206,29 @@
 
     function setStatus(){
       const online = navigator.onLine;
-      els.statusBadge.textContent = online ? 'online' : 'offline';
-      els.statusBadge.style.color = online ? 'var(--ok)' : 'var(--danger)';
+      if(!online){
+        els.statusBadge.textContent = 'offline';
+        els.statusBadge.style.color = 'var(--danger)';
+        return;
+      }
+      els.statusBadge.textContent = 'checking…';
+      els.statusBadge.style.color = 'var(--accent)';
+      probeConnectivity();
+    }
+    async function probeConnectivity(){
+      try{
+        const r = await fetch('https://www.federalregister.gov/api/v1/documents.json?per_page=1&order=newest', {cache:'no-store'});
+        if(r.ok){
+          els.statusBadge.textContent = 'online';
+          els.statusBadge.style.color = 'var(--ok)';
+        } else {
+          els.statusBadge.textContent = 'limited';
+          els.statusBadge.style.color = 'var(--danger)';
+        }
+      }catch{
+        els.statusBadge.textContent = 'limited';
+        els.statusBadge.style.color = 'var(--danger)';
+      }
     }
 
     window.addEventListener('online', setStatus);
@@ -311,11 +349,16 @@
     async function loadAll(){
       const cfg = store.get();
       els.stateLabel.textContent = cfg.state || 'set state';
-      await Promise.allSettled([
+      const results = await Promise.allSettled([
         loadFederalRegister(cfg.perPage||10),
         loadNws(cfg.state||'PA', cfg.perPage||10),
         loadCongress(cfg.perPage||10, cfg.cgKey||'')
       ]);
+      // If any feed fulfilled, mark online
+      if(results.some(r=>r.status==='fulfilled')){
+        els.statusBadge.textContent = 'online';
+        els.statusBadge.style.color = 'var(--ok)';
+      }
       renderSaved();
     }
 
@@ -343,6 +386,41 @@
     });
 
     els.refreshBtn.addEventListener('click', loadAll);
+
+    // Diagnostics UI
+    els.diagnoseBtn.addEventListener('click', ()=>{ els.diag.showModal(); runDiagnostics(); });
+    els.closeDiag.addEventListener('click', ()=> els.diag.close());
+
+    async function runDiagnostics(){
+      const cfg = store.get();
+      els.diagOut.innerHTML = `<div class="card"><span class="spinner"></span> Testing connectivity…</div>`;
+      const tests = [
+        {
+          name: 'Federal Register',
+          url: 'https://www.federalregister.gov/api/v1/documents.json?per_page=1&order=newest',
+          init: {cache:'no-store'}
+        },
+        {
+          name: 'NWS Alerts',
+          url: `https://api.weather.gov/alerts/active?area=${(cfg.state||'PA').toUpperCase()}&limit=1`,
+          init: {headers:{'Accept':'application/geo+json'}, cache:'no-store'}
+        },
+        {
+          name: 'Congress.gov (if key present)',
+          url: cfg.cgKey ? `https://api.congress.gov/v3/bill?api_key=${encodeURIComponent(cfg.cgKey)}&format=json&limit=1` : null,
+          init: {cache:'no-store'}
+        }
+      ];
+      const results = await Promise.all(tests.map(async t=>{
+        if(!t.url) return {name:t.name, ok:null, status:'(skipped — no key)'};
+        try{ const r = await fetch(t.url, t.init); return {name:t.name, ok:r.ok, status:r.status}; }
+        catch(e){ return {name:t.name, ok:false, status:e.message}; }
+      }));
+      els.diagOut.innerHTML = results.map(r=>{
+        const badge = r.ok===true ? '<span class="badge ok">ok</span>' : (r.ok===null ? '<span class="badge">skipped</span>' : '<span class="badge danger">fail</span>');
+        return `<div class="card"><div class="row" style="justify-content:space-between"><strong>${r.name}</strong>${badge}</div><div class="meta">Status: ${r.status}</div></div>`;
+      }).join('');
+    }
 
     // Save/Unsave via event delegation
     document.addEventListener('click', (e)=>{
