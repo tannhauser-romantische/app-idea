@@ -1,4 +1,3 @@
-
 <!doctype html>
 <html lang="en">
 <head>
@@ -84,6 +83,22 @@
 
     <section>
       <div class="section-title">
+        <h2>Regulations.gov — latest</h2>
+        <span class="badge" id="regsCount">API key optional</span>
+      </div>
+      <div id="regsList" class="grid"></div>
+    </section>
+
+    <section>
+      <div class="section-title">
+        <h2>Economy — FRED</h2>
+        <span class="badge" id="fredBadge">widget</span>
+      </div>
+      <div id="fredPanel" class="grid"></div>
+    </section>
+
+    <section>
+      <div class="section-title">
         <h2>Weather — <span id="placeLabel">locating…</span></h2>
         <span class="badge" id="wxBadge">…</span>
       </div>
@@ -133,6 +148,13 @@
         <label for="cgKey">Congress.gov API key (optional)</label>
         <input id="cgKey" name="cgKey" type="password" placeholder="Paste your key" />
       </div>
+      <div class="field">
+        <label for="regsKey">Regulations.gov API key (api.data.gov)</label>
+        <input id="regsKey" name="regsKey" type="password" placeholder="Paste your key" />
+      </div>
+      <div class="field">
+        <label><input id="showFred" type="checkbox" checked/> Show FRED @ a Glance widget</label>
+      </div>
       <div class="row" style="justify-content:flex-end;gap:8px;margin-top:6px">
         <button class="btn ghost" type="reset" id="resetBtn">Reset</button>
         <button class="btn primary" type="submit">Save</button>
@@ -157,8 +179,10 @@
 
     const els = {
       frList: document.getElementById('frList'),
+      regsList: document.getElementById('regsList'),
       cgList: document.getElementById('cgList'),
       frCount: document.getElementById('frCount'),
+      regsCount: document.getElementById('regsCount'),
       cgCount: document.getElementById('cgCount'),
       savedList: document.getElementById('savedList'),
       savedCount: document.getElementById('savedCount'),
@@ -181,6 +205,8 @@
       placeLabel: document.getElementById('placeLabel'),
       wxBadge: document.getElementById('wxBadge'),
       wxPanel: document.getElementById('wxPanel'),
+      fredBadge: document.getElementById('fredBadge'),
+      fredPanel: document.getElementById('fredPanel'),
     };
 
     // Normalize state codes (returns 'PA' or null). Accepts 'pa', 'PA', or 'US-PA'.
@@ -224,7 +250,7 @@
     const store = {
       get(){
         const raw = localStorage.getItem('govfeeds');
-        const def = { state: 'PA', perPage: 10, cgKey: '', useGeo: false };
+        const def = { state: 'PA', perPage: 10, cgKey: '', regsKey: '', useGeo: false, showFred: true };
         try { return raw ? { ...def, ...JSON.parse(raw) } : def; } catch { return def; }
       },
       set(v){ localStorage.setItem('govfeeds', JSON.stringify(v)); }
@@ -333,6 +359,42 @@
       }
     }
 
+    // ---------- Regulations.gov ----------
+    async function loadRegs(perPage, key){
+      els.regsList.innerHTML = `<div class="card"><span class="spinner"></span> Loading Regulations.gov…</div>`;
+      if(!key){ els.regsList.innerHTML = `<div class="card empty">Add a Regulations.gov API key (api.data.gov) in Settings to see latest documents.</div>`; els.regsCount.textContent = 'no key'; return; }
+      try{
+        const url = new URL('https://api.regulations.gov/v4/documents');
+        url.searchParams.set('sort','-postedDate');
+        url.searchParams.set('page[size]', perPage);
+        url.searchParams.set('api_key', key);
+        const res = await fetch(url, { cache:'no-store' });
+        if(!res.ok){
+          let detail=''; try{ const j = await res.json(); detail = j?.errors?.[0]?.detail || j?.detail || ''; }catch{}
+          throw new Error(`HTTP ${res.status}${detail? ' – '+detail : ''}`);
+        }
+        const json = await res.json();
+        const rows = (json.data||[]).map(d=>{
+          const a = d.attributes || {};
+          const title = a.title || a.documentName || 'Document';
+          const agency = a.agency || a.agencyAcronym || (a.agencies && a.agencies[0]?.name) || 'Agency';
+          const posted = a.postedDate || a.lastModifiedDate || a.lastModified;
+          const docketId = a.docketId || (a.docketIds && a.docketIds[0]) || '';
+          const docType = a.documentType || a.type || 'doc';
+          const url = `https://www.regulations.gov/document/${encodeURIComponent(d.id||a.documentId||'')}`;
+          const pills = [docType, docketId].filter(Boolean);
+          const meta = `${agency}${posted?` · ${posted} (${timeAgo(posted)})`:''}`;
+          const id = `REGS:${d.id||title}`;
+          return card({title, meta, url, pills, id, source:'REGS'});
+        }).join('');
+        els.regsList.innerHTML = rows || `<div class="card empty">No recent documents.</div>`;
+        els.regsCount.textContent = (json.data||[]).length || '0';
+      }catch(err){
+        els.regsList.innerHTML = `<div class="card danger">Regulations.gov error: ${err.message}</div>`;
+        els.regsCount.textContent = 'error';
+      }
+    }
+
     // ---------- Weather (NWS) ----------
     async function getPreferredCoords(){
       const cfg = store.get();
@@ -392,6 +454,12 @@
       }
     }
 
+    async function loadFRED(show){
+      if(!show){ els.fredPanel.innerHTML = `<div class="card empty">FRED widget disabled in Settings.</div>`; els.fredBadge.textContent = 'off'; return; }
+      els.fredPanel.innerHTML = `<article class="card"><iframe title="FRED @ A Glance" style="width:100%;height:520px;border:0;overflow:hidden" src="https://research.stlouisfed.org/fred-glance-widget.php" loading="lazy" referrerpolicy="no-referrer"></iframe></article>`;
+      els.fredBadge.textContent = 'widget';
+    }
+
     async function loadCongress(perPage, key){
       els.cgList.innerHTML = `<div class="card"><span class="spinner"></span> Loading Congress.gov…</div>`;
       if(!key){ els.cgList.innerHTML = `<div class="card empty">Add a Congress.gov API key in Settings to see recent bills.</div>`; els.cgCount.textContent = 'no key'; return; }
@@ -425,13 +493,17 @@
       const cfg = store.get();
       const results = await Promise.allSettled([
         loadFederalRegister(cfg.perPage||10),
+        loadRegs(cfg.perPage||10, cfg.regsKey||''),
         loadWeather(),
+        loadFRED(cfg.showFred!==false),
         loadCongress(cfg.perPage||10, cfg.cgKey||'')
       ]);
       if(results.some(r=>r.status==='fulfilled')){
         els.statusBadge.textContent = 'online';
         els.statusBadge.style.color = 'var(--ok)';
       }
+      renderSaved();
+    }
       renderSaved();
     }
 
@@ -441,6 +513,10 @@
       els.fieldState.value = cfg.state||'';
       els.fieldPerPage.value = cfg.perPage||10;
       els.fieldCgKey.value = cfg.cgKey||'';
+      const regs = document.getElementById('regsKey');
+      if(regs) regs.value = cfg.regsKey||'';
+      const showFred = document.getElementById('showFred');
+      if(showFred) showFred.checked = cfg.showFred!==false;
       els.fieldUseGeo.checked = !!cfg.useGeo;
       els.dlg.showModal();
     });
@@ -451,13 +527,26 @@
       const state = els.fieldState.value.trim().toUpperCase();
       const perPage = Math.max(1, Math.min(50, Number(els.fieldPerPage.value)||10));
       const cgKey = els.fieldCgKey.value.trim();
+      const regsEl = document.getElementById('regsKey');
+      const regsKey = (regsEl?.value||'').trim();
+      const showFredEl = document.getElementById('showFred');
+      const showFred = !!(showFredEl?.checked);
+      const useGeo = !!els.fieldUseGeo.checked;
+      store.set({state, perPage, cgKey, regsKey, useGeo, showFred});
+      els.dlg.close();
+      loadAll();
+    });
+      const state = els.fieldState.value.trim().toUpperCase();
+      const perPage = Math.max(1, Math.min(50, Number(els.fieldPerPage.value)||10));
+      const cgKey = els.fieldCgKey.value.trim();
       const useGeo = !!els.fieldUseGeo.checked;
       store.set({state, perPage, cgKey, useGeo});
       els.dlg.close();
       loadAll();
     });
     els.resetBtn.addEventListener('click', ()=>{
-      store.set({state:'PA', perPage:10, cgKey:'', useGeo:false});
+      store.set({state:'PA', perPage:10, cgKey:'', regsKey:'', useGeo:false, showFred:true});
+    });
     });
 
     els.refreshBtn.addEventListener('click', loadAll);
@@ -526,4 +615,3 @@
   </script>
 </body>
 </html>
-
