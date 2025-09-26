@@ -3,10 +3,103 @@
 <head>
   <meta charset="UTF-8">
   <title>GovFeeds App</title>
-  <link rel="stylesheet" href="style.css">
+  <style>
+    body { font-family: system-ui, sans-serif; background: #f8fafd; color: #222; padding: 0; margin: 0; }
+    .card { background: #fff; border-radius: 6px; box-shadow: 0 2px 8px #0001; padding: 16px; margin: 12px 0; }
+    .empty { color: #888; font-style: italic; }
+    .danger { border: 1px solid #d00; color: #b00; }
+    .title { margin: 0 0 8px; font-size: 1.2em; }
+    .meta { font-size: 0.9em; color: #666; margin-bottom: 6px; }
+    .pill { display: inline-block; background: #eee; border-radius: 2em; padding: 2px 10px; margin-right: 4px; font-size: 0.85em; }
+    .badge { padding: 2px 8px; background: #eee; border-radius: 1em; margin-left: 4px; }
+    .badge.ok { background: #0a0; color: #fff; }
+    .badge.danger { background: #d00; color: #fff; }
+    .grid { display: flex; gap: 8px; }
+    .spinner { display: inline-block; width: 20px; height: 20px; border: 3px solid #ddd; border-top: 3px solid #666; border-radius: 50%; animation: spin 1s linear infinite; vertical-align: middle; }
+    @keyframes spin { 100% { transform: rotate(360deg); } }
+    .btn { background: #eee; border: 1px solid #bbb; border-radius: 4px; padding: 4px 10px; cursor: pointer; margin: 2px 0; font-size: 1em; }
+    .save-btn[data-saved="1"] { color: #f5c518; font-weight: bold; }
+    .row { display: flex; justify-content: space-between; align-items: center; }
+    dialog { border: none; border-radius: 8px; box-shadow: 0 2px 24px #0003; padding: 24px; }
+    label { display: block; margin: 8px 0 2px; }
+    input[type="text"], input[type="number"] { width: 100%; padding: 5px; margin-bottom: 8px; }
+  </style>
 </head>
 <body>
-  <!-- Your HTML content here, including elements with the required IDs -->
+  <header style="padding: 1em 2em; background: #def;">
+    <h1 style="margin:0 0 4px;font-size:2em;">GovFeeds <span id="statusBadge" class="badge">checking…</span></h1>
+    <button id="refreshBtn" class="btn">Refresh</button>
+    <button id="openSettings" class="btn">Settings</button>
+    <button id="diagnoseBtn" class="btn">Diagnostics</button>
+  </header>
+  <main style="max-width: 800px; margin: 2em auto;">
+    <section>
+      <h2>Federal Register <span id="frCount" class="badge"></span></h2>
+      <div id="frList"></div>
+    </section>
+    <section>
+      <h2>Regulations.gov <span id="regsCount" class="badge"></span></h2>
+      <div id="regsList"></div>
+    </section>
+    <section>
+      <h2>Congress.gov <span id="cgCount" class="badge"></span></h2>
+      <div id="cgList"></div>
+    </section>
+    <section>
+      <h2>Saved <span id="savedCount" class="badge"></span></h2>
+      <div id="savedList"></div>
+    </section>
+    <section>
+      <h2>
+        Weather
+        <span id="placeLabel" class="meta"></span>
+        <span id="wxBadge" class="badge"></span>
+      </h2>
+      <div id="wxPanel"></div>
+    </section>
+    <section>
+      <h2>
+        FRED
+        <span id="fredBadge" class="badge"></span>
+      </h2>
+      <div id="fredPanel"></div>
+    </section>
+  </main>
+
+  <!-- Settings dialog -->
+  <dialog id="settings">
+    <form method="dialog" id="settingsForm">
+      <h3>Settings</h3>
+      <label for="state">State (2-letter code)</label>
+      <input type="text" id="state" maxlength="5" required>
+      <label for="perPage">Items per section</label>
+      <input type="number" id="perPage" min="1" max="50" required>
+      <label for="cgKey">Congress.gov API Key</label>
+      <input type="text" id="cgKey" autocomplete="off">
+      <label for="regsKey">Regulations.gov API Key</label>
+      <input type="text" id="regsKey" autocomplete="off">
+      <label for="showFred">
+        <input type="checkbox" id="showFred" checked> Show FRED widget
+      </label>
+      <label for="useGeo">
+        <input type="checkbox" id="useGeo"> Use geolocation for weather
+      </label>
+      <div class="grid" style="margin-top:16px;">
+        <button type="submit" class="btn">Save</button>
+        <button id="closeSettings" type="button" class="btn">Cancel</button>
+        <button id="resetBtn" type="button" class="btn">Reset</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Diagnostics dialog -->
+  <dialog id="diag">
+    <h3>Diagnostics</h3>
+    <div id="diagOut"></div>
+    <button id="closeDiag" class="btn" style="margin-top:1em;">Close</button>
+  </dialog>
+
+  <!-- Your logic -->
   <script src="index.js"></script>
 </body>
 </html>
