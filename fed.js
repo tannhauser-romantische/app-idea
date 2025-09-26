@@ -1,6 +1,5 @@
 // ---- FRED Data Section ----
-// You need a FRED API key for full access.
-// Get one for free at https://fred.stlouisfed.org/docs/api/api_key.html
+// Add your FRED API key if you want (not strictly required for most series)
 const FRED_API_KEY = ""; // Optional: add your FRED API key here
 const FRED_SERIES = [
   { id: "CPIAUCSL", name: "Consumer Price Index (CPI-U)" },
@@ -40,7 +39,6 @@ async function renderFRED() {
 }
 
 // ---- Federal Reserve News & Publications ----
-// Uses the public RSS feed for all press releases (no API key needed)
 async function renderFedNews() {
   const el = document.getElementById("fed-news");
   el.innerHTML = `<div class="card"><span class="spinner"></span> Loading news…</div>`;
@@ -62,7 +60,7 @@ async function renderFedNews() {
   }
 }
 
-// ---- Research & Commentary (Fed Speeches) ----
+// ---- Research & Commentary ----
 async function renderFedResearch() {
   const el = document.getElementById("fed-research");
   el.innerHTML = `<div class="card"><span class="spinner"></span> Loading research…</div>`;
@@ -84,7 +82,7 @@ async function renderFedResearch() {
   }
 }
 
-// ---- Tools & Calculators (Static Links, can add widgets) ----
+// ---- Tools & Calculators ----
 function renderFedTools() {
   const el = document.getElementById("fed-tools");
   el.innerHTML = `
