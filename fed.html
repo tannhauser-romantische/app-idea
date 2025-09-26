@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Federal Reserve Data & News</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    body { font-family: system-ui, sans-serif; background: #f8fafd; color: #222; padding: 0; margin: 0; }
+    main { max-width: 900px; margin: 2em auto; }
+    .card { background: #fff; border-radius: 6px; box-shadow: 0 2px 8px #0001; padding: 16px; margin: 12px 0; }
+    h2 { margin-top: 2em; }
+    .section-list { margin-bottom: 2em; }
+  </style>
+</head>
+<body>
+  <header style="padding: 1em 2em; background: #def;">
+    <h1 style="margin:0 0 4px;">Federal Reserve Data & News</h1>
+    <nav>
+      <a href="index.html" class="btn">← Main App</a>
+    </nav>
+  </header>
+  <main>
+    <section>
+      <h2>1. FRED Data Series</h2>
+      <div id="fred-data" class="section-list card">
+        <!-- Dynamic FRED charts, tables, or summaries will go here -->
+        <em>Loading FRED data series…</em>
+      </div>
+    </section>
+    <section>
+      <h2>2. Federal Reserve News & Publications</h2>
+      <div id="fed-news" class="section-list card">
+        <!-- Latest news, press releases, FOMC statements, etc. -->
+        <em>Loading Federal Reserve news…</em>
+      </div>
+    </section>
+    <section>
+      <h2>3. Research & Commentary</h2>
+      <div id="fed-research" class="section-list card">
+        <!-- Research papers, speeches, blog posts, etc. -->
+        <em>Loading research & commentary…</em>
+      </div>
+    </section>
+    <section>
+      <h2>4. Tools & Calculators</h2>
+      <div id="fed-tools" class="section-list card">
+        <!-- Links to calculators, widgets, etc. -->
+        <em>Loading Fed tools & calculators…</em>
+      </div>
+    </section>
+  </main>
+  <script src="fed.js"></script>
+</body>
+</html>
